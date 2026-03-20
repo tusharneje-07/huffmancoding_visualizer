@@ -21,3 +21,4 @@ node_modules/
 *.swo
 coverage/
 .env
+.ruff_cache
