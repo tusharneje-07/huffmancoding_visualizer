@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Huffman Coding Visualizer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --border: #d8dde5;
+      --ink: #1f2937;
+      --muted: #5e6a79;
+      --accent: #1e5bb8;
+      --node-leaf: #fff4cc;
+      --node-internal: #dff0ff;
+    }
+
+    body {
+      font-family: "Manrope", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    .mono { font-family: "JetBrains Mono", monospace; }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+
+    .btn {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .btn:hover { background: #f8fafc; }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #174e9d;
+      border-color: #174e9d;
+      color: #fff;
+      filter: none;
+    }
+
+    #tree-container {
+      width: 100%;
+      height: 100%;
+      min-height: 360px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #fdfefe;
+    }
+
+    .node-circle {
+      stroke-width: 1.6;
+    }
+
+    .node-leaf {
+      fill: var(--node-leaf);
+      stroke: #b89a3f;
+    }
+
+    .node-internal {
+      fill: var(--node-internal);
+      stroke: #1e5bb8;
+    }
+
+    .edge {
+      fill: none;
+      stroke: #3b4e66;
+      stroke-width: 1.6;
+    }
+
+    .edge-label {
+      fill: #d24720;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    #build-canvas-wrap {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    #buildCanvas {
+      width: 100%;
+      height: 360px;
+      display: block;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+  </style>
+</head>
+<body>
+  <main class="max-w-[1600px] mx-auto px-3 md:px-5 py-3 md:py-4 lg:flex lg:flex-col gap-3">
+    <section class="panel p-4 shrink-0">
+      <div class="flex flex-col gap-3">
+        <div>
+          <h1 class="text-2xl md:text-3xl font-semibold">Huffman Coding Visualizer</h1>
+          <p class="text-sm text-slate-600 mt-1">Upload a file or type text, then inspect encoding, tree, and stats in one view.</p>
+        </div>
+
+        <form action="/" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr_auto] gap-2 items-center">
+          <input id="fileInput" type="file" name="file" accept=".txt,.csv,.log,.md,.json,.py,.java,.cpp,.c,.html,.js" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm min-h-[44px]" />
+          <textarea id="typeInput" name="direct_text" placeholder="Type or paste text" class="w-full rounded-xl border border-slate-300 bg-white px-3 pt-[10px] pb-[10px] text-sm leading-5 h-[44px] resize-none"></textarea>
+          <button type="submit" class="btn btn-primary">Process</button>
+        </form>
+
+        {% if error %}
+        <div class="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">{{ error }}</div>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if uploaded_text is not none %}
+    <section class="lg:flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.06fr_1.54fr] gap-3">
+      <div class="min-h-0 grid grid-rows-[1fr_1fr_auto] gap-3">
+        <article class="panel p-3 min-h-0 flex flex-col">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm md:text-base font-semibold">Input Content</h2>
+            <span class="mono text-xs text-slate-500">{{ filename }}</span>
+          </div>
+          <textarea readonly class="mono mt-2 flex-1 min-h-0 w-full rounded-xl border border-slate-300 p-2 text-xs">{{ uploaded_text }}</textarea>
+        </article>
+
+        <article class="panel p-3 min-h-0 flex flex-col">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm md:text-base font-semibold">Encoded Output</h2>
+            <span class="mono text-xs text-slate-500">{{ encoded_total_bits }} bits</span>
+          </div>
+          <textarea readonly class="mono mt-2 flex-1 min-h-0 w-full rounded-xl border border-slate-300 p-2 text-xs">{{ encoded_preview }}</textarea>
+        </article>
+
+        <article class="panel p-3">
+          <div class="grid grid-cols-3 gap-2 text-xs">
+            <div class="rounded-lg border border-slate-200 p-2">
+              <div class="text-slate-600">Original</div>
+              <div class="mono font-semibold">{{ stats.original }} B</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-2">
+              <div class="text-slate-600">Compressed</div>
+              <div class="mono font-semibold">{{ stats.compressed }} B</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-2">
+              <div class="text-slate-600">Decompressed</div>
+              <div class="mono font-semibold">{{ stats.decompressed }} B</div>
+            </div>
+          </div>
+
+          <div class="mt-2 flex items-center justify-between">
+            <h3 class="text-xs font-semibold text-slate-700">Character Table</h3>
+            <div class="flex gap-2">
+              <button id="expandTableBtn" class="btn text-xs">Expand</button>
+              {% if compressed_filename %}
+              <a class="btn text-xs" href="{{ url_for('download_file', filename=compressed_filename) }}">Download .bin</a>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mt-2 max-h-24 overflow-auto rounded-lg border border-slate-200">
+            <table class="w-full text-xs">
+              <thead class="bg-slate-100 sticky top-0">
+                <tr>
+                  <th class="text-left p-1.5">Char</th>
+                  <th class="text-left p-1.5">Freq</th>
+                  <th class="text-left p-1.5">Code</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in code_table %}
+                <tr class="border-t">
+                  <td class="p-1.5 mono">{{ row.char }}</td>
+                  <td class="p-1.5 mono">{{ row.freq }}</td>
+                  <td class="p-1.5 mono">{{ row.code }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </div>
+
+      <article class="panel p-3 min-h-0 flex flex-col">
+        <div class="flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <h2 class="text-sm md:text-base font-semibold">Huffman Tree (Top to Bottom)</h2>
+          <div class="flex gap-1.5">
+            <button id="zoomInBtn" class="btn text-xs">+ Zoom</button>
+            <button id="zoomOutBtn" class="btn text-xs">- Zoom</button>
+            <button id="resetBtn" class="btn text-xs">Reset</button>
+            <button id="exportSvgBtn" class="btn text-xs">SVG</button>
+            <button id="exportPngBtn" class="btn text-xs">PNG</button>
+          </div>
+        </div>
+        <div class="flex-1 min-h-0 mt-2" id="tree-container">
+          <svg id="tree-svg" width="100%" height="100%" aria-label="Huffman tree"></svg>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel p-3 mt-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-sm md:text-base font-semibold">Tree Build Animation (Canvas)</h2>
+        <div class="flex gap-1.5">
+          <button id="playPauseBuildBtn" class="btn text-xs">Pause</button>
+          <button id="restartBuildBtn" class="btn text-xs">Restart</button>
+        </div>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">Animated progression of links and nodes as the Huffman tree appears from root to leaves.</p>
+      <div class="mt-2" id="build-canvas-wrap">
+        <canvas id="buildCanvas" aria-label="Huffman build animation canvas"></canvas>
+      </div>
+    </section>
+    {% endif %}
+  </main>
+
+  <div id="tableModal" class="fixed inset-0 hidden items-center justify-center bg-black/45 p-4">
+    <div class="panel w-full max-w-4xl max-h-[85vh] p-4 flex flex-col">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-semibold">Character Table (Expanded)</h3>
+        <button id="closeTableModalBtn" class="btn">Close</button>
+      </div>
+      <div class="mt-3 overflow-auto rounded-lg border border-slate-300 flex-1">
+        <table class="w-full text-sm bg-white">
+          <thead class="bg-slate-100 sticky top-0">
+            <tr>
+              <th class="text-left p-2">Character</th>
+              <th class="text-left p-2">Frequency</th>
+              <th class="text-left p-2">Code</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in code_table %}
+            <tr class="border-t">
+              <td class="p-2 mono">{{ row.char }}</td>
+              <td class="p-2 mono">{{ row.freq }}</td>
+              <td class="p-2 mono">{{ row.code }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const treeData = {{ tree_data | tojson }};
+    const mergeSteps = {{ merge_steps | tojson }};
+
+    const tableModal = document.getElementById("tableModal");
+    document.getElementById("expandTableBtn")?.addEventListener("click", () => {
+      tableModal?.classList.remove("hidden");
+      tableModal?.classList.add("flex");
+    });
+    document.getElementById("closeTableModalBtn")?.addEventListener("click", () => {
+      tableModal?.classList.add("hidden");
+      tableModal?.classList.remove("flex");
+    });
+    tableModal?.addEventListener("click", (event) => {
+      if (event.target === tableModal) {
+        tableModal.classList.add("hidden");
+        tableModal.classList.remove("flex");
+      }
+    });
+
+    let svg;
+    let zoom;
+    let buildAnimId = null;
+    let buildState = null;
+    let buildStartTs = 0;
+    let buildPausedElapsed = 0;
+    let buildPaused = false;
+    const BUILD_STEP_MS = 420;
+
+    function nodeLabel(d) {
+      if (d.data.name.startsWith("Internal")) {
+        return String(d.data.freq);
+      }
+      return d.data.name.length > 12 ? `${d.data.name.slice(0, 12)}...` : d.data.name;
+    }
+
+    function renderTree(data) {
+      if (!data) {
+        return;
+      }
+
+      const container = document.getElementById("tree-container");
+      const width = Math.max(container.clientWidth, 320);
+      const height = Math.max(container.clientHeight, 320);
+
+      svg = d3.select("#tree-svg");
+      svg.selectAll("*").remove();
+      svg.attr("viewBox", `0 0 ${width} ${height}`);
+
+      const zoomLayer = svg.append("g");
+      const graph = zoomLayer.append("g");
+      const root = d3.hierarchy(data);
+      const treeLayout = d3.tree().nodeSize([100, 100]);
+      treeLayout(root);
+
+      graph
+        .selectAll("path.edge")
+        .data(root.links())
+        .join("path")
+        .attr("class", "edge")
+        .attr("d", d3.linkVertical().x((d) => d.x).y((d) => d.y));
+
+      graph
+        .selectAll("text.edge-label")
+        .data(root.links())
+        .join("text")
+        .attr("class", "edge-label mono")
+        .attr("x", (d) => (d.source.x + d.target.x) / 2)
+        .attr("y", (d) => (d.source.y + d.target.y) / 2 - 6)
+        .attr("text-anchor", "middle")
+        .text((d) => d.target.data.edge || "");
+
+      const node = graph
+        .selectAll("g.node")
+        .data(root.descendants())
+        .join("g")
+        .attr("class", "node")
+        .attr("transform", (d) => `translate(${d.x},${d.y})`);
+
+      node
+        .append("circle")
+        .attr("r", 24)
+        .attr("class", (d) => (d.children ? "node-circle node-internal" : "node-circle node-leaf"));
+
+      node
+        .append("text")
+        .attr("dy", 4)
+        .attr("text-anchor", "middle")
+        .attr("class", "mono")
+        .style("font-size", "11px")
+        .text((d) => nodeLabel(d));
+
+      node
+        .append("title")
+        .text((d) => d.data.name);
+
+      zoom = d3.zoom().scaleExtent([0.25, 4]).on("zoom", (event) => {
+        zoomLayer.attr("transform", event.transform);
+      });
+      svg.call(zoom);
+
+      const bounds = graph.node().getBBox();
+      const dx = bounds.width || 1;
+      const dy = bounds.height || 1;
+      const scale = Math.min((width - 40) / dx, (height - 40) / dy, 1);
+      const tx = (width - dx * scale) / 2 - bounds.x * scale;
+      const ty = (height - dy * scale) / 2 - bounds.y * scale;
+      svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    }
+
+    function resizeCanvas(canvas) {
+      const dpr = window.devicePixelRatio || 1;
+      const displayWidth = Math.max(320, Math.floor(canvas.clientWidth));
+      const displayHeight = Math.max(260, Math.floor(canvas.clientHeight));
+      canvas.width = Math.floor(displayWidth * dpr);
+      canvas.height = Math.floor(displayHeight * dpr);
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { width: displayWidth, height: displayHeight, ctx };
+    }
+
+    function leafLabel(node) {
+      if (!node || node.char == null) {
+        return "";
+      }
+      const text = String(node.char);
+      if (text.length <= 5) {
+        return text;
+      }
+      return `${text.slice(0, 5)}...`;
+    }
+
+    function buildNodeLabel(node) {
+      if (!node) {
+        return "";
+      }
+      if (!node.is_leaf) {
+        return String(node.freq);
+      }
+      return `${leafLabel(node)} (${node.freq})`;
+    }
+
+    function createBuildState(steps, width, height) {
+      if (!Array.isArray(steps) || steps.length === 0) {
+        return { width, height, events: [], nodes: {}, leaves: [] };
+      }
+
+      const nodes = {};
+      const levels = {};
+      const leafOrder = [];
+      const seenLeaf = new Set();
+
+      const ensureNode = (node) => {
+        if (!node || node.id == null) {
+          return;
+        }
+        nodes[node.id] = {
+          id: node.id,
+          char: node.char,
+          freq: node.freq,
+          is_leaf: !!node.is_leaf,
+          x: 0,
+          y: 0,
+        };
+        if (node.is_leaf && !seenLeaf.has(node.id)) {
+          seenLeaf.add(node.id);
+          leafOrder.push(node.id);
+          levels[node.id] = 0;
+        }
+      };
+
+      for (const step of steps) {
+        if (!step || !step.left || !step.right || !step.parent) {
+          continue;
+        }
+        ensureNode(step.left);
+        ensureNode(step.right);
+        ensureNode(step.parent);
+
+        const leftLevel = levels[step.left.id] ?? 0;
+        const rightLevel = levels[step.right.id] ?? 0;
+        levels[step.parent.id] = Math.max(leftLevel, rightLevel) + 1;
+      }
+
+      const margin = 42;
+      const innerW = Math.max(1, width - margin * 2);
+      const innerH = Math.max(1, height - margin * 2);
+      const leafCount = Math.max(1, leafOrder.length);
+
+      leafOrder.forEach((id, index) => {
+        nodes[id].x = margin + ((index + 0.5) / leafCount) * innerW;
+      });
+
+      for (const step of steps) {
+        if (!step || !step.left || !step.right || !step.parent) {
+          continue;
+        }
+        const left = nodes[step.left.id];
+        const right = nodes[step.right.id];
+        const parent = nodes[step.parent.id];
+        if (!left || !right || !parent) {
+          continue;
+        }
+        parent.x = (left.x + right.x) / 2;
+      }
+
+      const maxLevel = Math.max(...Object.values(levels), 1);
+      for (const id of Object.keys(nodes)) {
+        const level = levels[id] ?? 0;
+        nodes[id].y = height - margin - (level / maxLevel) * innerH;
+      }
+
+      return {
+        width,
+        height,
+        events: steps,
+        nodes,
+        leaves: leafOrder,
+      };
+    }
+
+    function drawBuildLink(ctx, source, target, edgeLabel, progress = 1) {
+      if (!source || !target) {
+        return;
+      }
+      const sx = source.x;
+      const sy = source.y;
+      const tx = target.x;
+      const ty = target.y;
+      const ex = sx + (tx - sx) * progress;
+      const ey = sy + (ty - sy) * progress;
+
+      ctx.strokeStyle = "#3b4e66";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+
+      if (progress >= 1) {
+        ctx.fillStyle = "#d24720";
+        ctx.font = "700 12px JetBrains Mono";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const mx = (sx + tx) / 2;
+        const my = (sy + ty) / 2;
+        const offset = edgeLabel === "0" ? -9 : 9;
+        ctx.fillText(edgeLabel || "", mx + offset, my - 8);
+      }
+    }
+
+    function drawBuildNode(ctx, node, progress = 1) {
+      if (!node) {
+        return;
+      }
+      const r = 24 * Math.max(0.25, progress);
+      const isInternal = !node.is_leaf;
+      ctx.fillStyle = isInternal ? "#dff0ff" : "#fff4cc";
+      ctx.strokeStyle = isInternal ? "#1e5bb8" : "#b89a3f";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      if (progress > 0.45) {
+        ctx.fillStyle = "#1f2937";
+        ctx.font = "500 11px JetBrains Mono";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(buildNodeLabel(node), node.x, node.y + 1);
+      }
+    }
+
+    function drawBuildMerge(ctx, nodes, step, progress = 1) {
+      if (!step) {
+        return;
+      }
+      const left = nodes[step.left.id];
+      const right = nodes[step.right.id];
+      const parent = nodes[step.parent.id];
+
+      drawBuildLink(ctx, left, parent, "0", progress);
+      drawBuildLink(ctx, right, parent, "1", progress);
+      drawBuildNode(ctx, parent, progress);
+    }
+
+    function drawBuildFrame(progress) {
+      if (!buildState) {
+        return;
+      }
+
+      const canvas = document.getElementById("buildCanvas");
+      if (!canvas) {
+        return;
+      }
+
+      const { width, height, ctx, nodes, leaves } = buildState;
+      const events = Array.isArray(buildState.events) ? buildState.events : [];
+      if (!ctx || events.length === 0) {
+        return;
+      }
+      ctx.clearRect(0, 0, width, height);
+
+      for (const leafId of leaves) {
+        drawBuildNode(ctx, nodes[leafId], 1);
+      }
+
+      const safeProgress = Number.isFinite(progress) ? progress : 0;
+      const done = Math.max(0, Math.floor(safeProgress));
+      const partial = safeProgress - done;
+
+      for (let i = 0; i < done && i < events.length; i += 1) {
+        const event = events[i];
+        if (!event) {
+          continue;
+        }
+        drawBuildMerge(ctx, nodes, event, 1);
+      }
+
+      if (done < events.length) {
+        const event = events[done];
+        if (!event) {
+          return;
+        }
+        drawBuildMerge(ctx, nodes, event, partial);
+      }
+    }
+
+    function animateBuild(ts) {
+      if (!buildState || buildPaused) {
+        return;
+      }
+      const elapsed = ts - buildStartTs;
+      const totalSteps = Array.isArray(buildState.events) ? buildState.events.length : 0;
+      if (totalSteps === 0) {
+        return;
+      }
+      const progress = Math.min(totalSteps, elapsed / BUILD_STEP_MS);
+      drawBuildFrame(progress);
+
+      if (progress < totalSteps) {
+        buildAnimId = requestAnimationFrame(animateBuild);
+      } else {
+        buildAnimId = null;
+      }
+    }
+
+    function startBuildAnimation(reset = false) {
+      const canvas = document.getElementById("buildCanvas");
+      if (!canvas || !mergeSteps || mergeSteps.length === 0) {
+        return;
+      }
+
+      const { width, height, ctx } = resizeCanvas(canvas);
+      buildState = createBuildState(mergeSteps, width, height);
+      buildState.ctx = ctx;
+
+      if (buildAnimId) {
+        cancelAnimationFrame(buildAnimId);
+        buildAnimId = null;
+      }
+
+      if (reset) {
+        buildPausedElapsed = 0;
+      }
+
+      buildPaused = false;
+      const playPauseBtn = document.getElementById("playPauseBuildBtn");
+      if (playPauseBtn) {
+        playPauseBtn.textContent = "Pause";
+      }
+
+      buildStartTs = performance.now() - buildPausedElapsed;
+      buildAnimId = requestAnimationFrame(animateBuild);
+    }
+
+    function toggleBuildPause() {
+      if (!buildState) {
+        return;
+      }
+
+      const playPauseBtn = document.getElementById("playPauseBuildBtn");
+
+      if (buildPaused) {
+        buildPaused = false;
+        if (playPauseBtn) {
+          playPauseBtn.textContent = "Pause";
+        }
+        buildStartTs = performance.now() - buildPausedElapsed;
+        buildAnimId = requestAnimationFrame(animateBuild);
+      } else {
+        buildPaused = true;
+        if (buildAnimId) {
+          cancelAnimationFrame(buildAnimId);
+          buildAnimId = null;
+        }
+        buildPausedElapsed = performance.now() - buildStartTs;
+        if (playPauseBtn) {
+          playPauseBtn.textContent = "Play";
+        }
+      }
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function buildStyledSvgString() {
+      const svgElement = document.getElementById("tree-svg");
+      if (!svgElement) {
+        return null;
+      }
+
+      const cloned = svgElement.cloneNode(true);
+      cloned.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      cloned.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+
+      const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
+      style.textContent = `
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .edge { fill: none; stroke: #3b4e66; stroke-width: 1.6; }
+        .edge-label { fill: #d24720; font-size: 12px; font-weight: 700; }
+        .node-circle { stroke-width: 1.6; }
+        .node-leaf { fill: #fff4cc; stroke: #b89a3f; }
+        .node-internal { fill: #dff0ff; stroke: #1e5bb8; }
+      `;
+      cloned.insertBefore(style, cloned.firstChild);
+
+      const viewBox = svgElement.viewBox.baseVal;
+      const exportWidth = Math.max(1200, Math.ceil(viewBox.width || svgElement.clientWidth || 1200));
+      const exportHeight = Math.max(900, Math.ceil(viewBox.height || svgElement.clientHeight || 900));
+      cloned.setAttribute("width", String(exportWidth));
+      cloned.setAttribute("height", String(exportHeight));
+      cloned.setAttribute("viewBox", `0 0 ${exportWidth} ${exportHeight}`);
+
+      return new XMLSerializer().serializeToString(cloned);
+    }
+
+    function exportSvg() {
+      if (!treeData) {
+        return;
+      }
+
+      const svgString = buildStyledSvgString();
+      if (!svgString) {
+        return;
+      }
+      downloadBlob(new Blob([svgString], { type: "image/svg+xml;charset=utf-8" }), "huffman-tree.svg");
+    }
+
+    function exportPng() {
+      const svgElement = document.getElementById("tree-svg");
+      if (!treeData || !svgElement) {
+        return;
+      }
+
+      const svgString = buildStyledSvgString();
+      if (!svgString) {
+        return;
+      }
+
+      const svgDataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const viewBox = svgElement.viewBox.baseVal;
+        canvas.width = Math.max(1200, Math.ceil(viewBox.width || svgElement.clientWidth || 1200));
+        canvas.height = Math.max(900, Math.ceil(viewBox.height || svgElement.clientHeight || 900));
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((blob) => blob && downloadBlob(blob, "huffman-tree.png"), "image/png");
+      };
+
+      img.onerror = () => {
+        console.error("PNG export failed while loading SVG image");
+      };
+
+      img.src = svgDataUri;
+    }
+
+    document.getElementById("zoomInBtn")?.addEventListener("click", () => svg && zoom && svg.transition().duration(160).call(zoom.scaleBy, 1.2));
+    document.getElementById("zoomOutBtn")?.addEventListener("click", () => svg && zoom && svg.transition().duration(160).call(zoom.scaleBy, 0.85));
+    document.getElementById("resetBtn")?.addEventListener("click", () => renderTree(treeData));
+    document.getElementById("exportSvgBtn")?.addEventListener("click", exportSvg);
+    document.getElementById("exportPngBtn")?.addEventListener("click", exportPng);
+    document.getElementById("restartBuildBtn")?.addEventListener("click", () => startBuildAnimation(true));
+    document.getElementById("playPauseBuildBtn")?.addEventListener("click", toggleBuildPause);
+    window.addEventListener("resize", () => {
+      renderTree(treeData);
+      startBuildAnimation(true);
+    });
+
+    renderTree(treeData);
+    startBuildAnimation(true);
+  </script>
+</body>
+</html>
