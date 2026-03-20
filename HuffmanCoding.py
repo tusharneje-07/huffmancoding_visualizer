@@ -223,9 +223,9 @@ class HuffmanCoding:
         return output_path
 
 
+#  Example usage
 if __name__ == "__main__":
     path = "file.txt"
     h = HuffmanCoding(path)
-
     output_path = h.compress()
     h.decompress(output_path)

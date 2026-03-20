@@ -109,33 +109,6 @@ Notes:
 
 ## Screenshots
 
-Place your screenshots in `docs/screenshots/` and name them `SS1.png` and `SS2.png`. The detailed docs reference them inline, so once you add those files they will appear in the rendered documentation on GitHub.
+![Screenshot1](./SS1.png)
+![Screenshot1](./SS2.png)
 
-Example:
-
-```
-docs/screenshots/SS1.png
-docs/screenshots/SS2.png
-```
-
-## Limitations and future work
-
-- The server is synchronous and not optimized for production. For production use, move to ASGI or serve behind a WSGI server (gunicorn) and add request limits.
-- No authentication or access control — files are stored in a public local `uploads/` directory. Do not use this as-is in multi-user environments.
-- Exported PNG quality depends on layout; large trees may need higher export resolution.
-- Animation currently replays merge steps; a more advanced animation could show heap contents or priorities during each merge.
-
-## Contributing
-
-Contributions welcome. Steps to contribute:
-
-1. Fork the repo.
-2. Create a feature branch.
-3. Run tests / sanity checks locally.
-4. Open a PR with a clear description of the change.
-
-Please follow conventional commit messages for PRs so the history stays clean.
-
----
-
-If you need me to include example screenshots inside `docs/screenshots/` (placeholder images) I can add simple SVG placeholders, or you can copy your screenshots into that location and commit them.

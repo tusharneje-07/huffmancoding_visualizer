@@ -28,12 +28,11 @@ Quickstart
 Detailed documentation
 For a deeper explanation of the algorithm, UI design decisions, animation data, and how the project is structured, see `docs/README.md`.
 
-Screenshots
-Place two screenshots as `docs/screenshots/SS1.png` and `docs/screenshots/SS2.png` to show UI examples. The docs will reference those files.
-
 Files
 - `app.py` — Flask server and request handling
 - `HuffmanCoding.py` — Huffman implementation with merge-tracing
 - `templates/index.html` — frontend UI (Tailwind + D3 + Canvas)
 
-License: MIT
+Screenshots
+![Screenshot1](./docs/SS1.png)
+![Screenshot1](./docs/SS2.png)
